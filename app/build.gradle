@@ -1,0 +1,78 @@
+apply plugin: 'com.android.library'
+
+android {
+    compileSdkVersion 25
+    buildToolsVersion "25.0.2"
+    defaultConfig {
+        minSdkVersion 15
+        targetSdkVersion 25
+        versionCode 5406
+        versionName "v5.4.06"
+
+        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    productFlavors {
+    }
+
+    sourceSets {
+        main {
+            java.srcDirs = ['src/main/java', 'src/main/aidl']
+        }
+    }
+
+    lintOptions {
+        abortOnError false
+    }
+
+    task makeJar(type: Copy) {
+        delete 'build/libs/zframe%.jar'
+        from('build/intermediates/bundles/release/')
+        into('build/libs/')
+        include('classes.jar')
+        rename ('classes.jar', 'zframe'+ '-' + defaultConfig.versionName+'.jar')
+    }
+    makeJar.dependsOn(build)
+
+    task delJar(type: Delete) {//from和into都只执行的最后一条
+        delete 'test/Cleint/app/libs/zframe%.jar'
+        delete 'test/Service/app/libs/zframe%.jar'
+    }
+    delJar.dependsOn(makeJar)
+
+    task doCleintJar(type: Copy) {
+        from('build/intermediates/bundles/release/')
+        into('test/Cleint/app/libs/')
+        include('classes.jar')
+        rename ('classes.jar', 'zframe.jar')
+    }
+    doCleintJar.dependsOn(delJar)
+
+    task doJar(type: Copy) {//from和into都只执行的最后一条
+        from('build/intermediates/bundles/release/')
+        into('test/Service/app/libs/')
+        include('classes.jar')
+        rename ('classes.jar', 'zframe.jar')
+    }
+    doJar.dependsOn(doCleintJar)
+}
+
+//在终端执行生成 JAR 包
+// gradlew makeJar
+
+dependencies {
+    //compile fileTree(include: ['*.jar'], dir: 'libs')
+    androidTestCompile('com.android.support.test.espresso:espresso-core:2.2.2', {
+        exclude group: 'com.android.support', module: 'support-annotations'
+    })
+    compile 'com.android.support:appcompat-v7:23.0.1'
+    testCompile 'junit:junit:4.12'
+    provided files('libs/android-vcard.jar')
+}

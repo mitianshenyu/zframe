@@ -1,0 +1,625 @@
+﻿功能
+    1.本地数据监听,执行set时触发
+        Boolean bool = new Boolean(false); //定义本地数据
+        bool.addObserver(new Observer<Boolean>() { //设置监听
+            @Override
+            public void onChanged(Boolean curr, Boolean last) {
+                if (curr.get() != last.get()) {
+
+                }
+            }
+        });
+
+        bool.set(true); //触发监听
+    2.远程数据的管理,如监听,共享,与保存等,其操作方法与本地变量一样,只是设置监听的类型必须为I*Observer.Stub
+        @Override
+        public void onServiceConnected(ComponentName componentName, IBinder iBinder) {
+            mManager = IManager.Stub.asInterface(iBinder);
+            if (null != mManager) {
+                Boolean bool = new Boolean(mManager, "Model.bool", false); //定义远程数据
+
+                bool.addObserver(new IBooleanObserver.Stub() { //设置监听
+                    @Override
+                    public void onChanged(Boolean curr, Boolean last) throws RemoteException {
+                        if (curr.get() != last.get()) {
+
+                        }
+                    }
+                });
+
+                bool.set(true); //触发监听
+            }
+        }
+
+    3.多服务(跨apk)的管理,即接口共享
+        创建管理服务apk,然后再管理服务apk中启动所有客户端的服务,在每个客服端的服务被绑定后即可共享其他客户端所有接口
+
+    4.修复一个同进程,下不能访问远程变量的bug
+
+
+    用法
+        //创建本地变量
+        mLocalBoolean = new Boolean("boolean", false);
+        //添加本地变量监听
+        mLocalBoolean.addObserver(new Observer<Boolean>() {
+            @Override
+            public void onChanged(Boolean curr, Boolean last) {
+                Log.d("","");
+            }
+        });
+        //添加本地变量监听
+        mLocalBoolean.addObserver(new BooleanObserver() {
+            @Override
+            public void onChanged(Boolean curr, Boolean last) throws RemoteException {
+                Log.d("","");
+            }
+        });
+
+        //创建远程变量
+        mRemoteBoolean = new Boolean(Remoter.asInterface(iBinder), "boolean", false);
+        //创建远程(跨进程)监听
+        mRemoteBoolean.addObserver(new BooleanObserver() {
+            @Override
+            public void onChanged(Boolean curr, Boolean last) throws RemoteException {
+                Log.d("test", "test");
+            }
+        });
+
+        管理服务
+            //继承法
+            public class ManagerService extends Service {
+                Boolean mBoolean;
+
+                @Override
+                public IBinder onBind(Intent intent, Remoter bindrem) {
+                    try {
+                        bindrem.bindRemoteService("client", "com.zeu.remoteclient", "com.zeu.remoteclient.ClientService", new Connection() {
+                            @Override
+                            public void onConnected(String serviceName, ComponentName name, IBinder service) throws RemoteException {
+
+                            }
+                            @Override
+                            public void onDisconnected(String serviceName, ComponentName name) throws RemoteException {
+
+                            }
+                        });
+
+                        //启动远程变量
+                        bindrem.bindRemoteService("test", "com.zeu.remotetest", "com.zeu.remotetest.TestService", new Connection() {
+                            @Override
+                            public void onConnected(String serviceName, ComponentName name, IBinder service) throws RemoteException {
+
+                            }
+                            @Override
+                            public void onDisconnected(String serviceName, ComponentName name) throws RemoteException {
+
+                            }
+                        });
+
+                        //创建本地变量
+                        mBoolean = new Boolean("boolean", false);
+                        //添加本地变量监听
+                        mBoolean.addObserver(new Observer<Boolean>() {
+                            @Override
+                            public void onChanged(Boolean curr, Boolean last) {
+                                Log.d("","");
+                            }
+                        });
+                        //添加本地变量监听
+                        mBoolean.addObserver(new BooleanObserver() {
+                            @Override
+                            public void onChanged(Boolean curr, Boolean last) throws RemoteException {
+                                Log.d("","");
+                            }
+                        });
+                    } catch (RemoteException e) {
+                        e.printStackTrace();
+                    }
+                    return null;
+                }
+
+                @Override
+                public boolean onUnbind(Intent intent) {
+                    return super.onUnbind(intent);
+                }
+
+                @Override
+                public void onDestroy() {
+                    super.onDestroy();
+                }
+            }
+
+            //变量返回
+            public abstract class Service extends android.app.Service {
+                Remoter mRemoter = new Remoter();
+                @Override
+                public IBinder onBind(Intent intent) {
+                    return mRemoter;
+                }
+            }
+
+
+v3.08.01
+    修改了TickerTask, 在start未对 counter初始化的bug
+
+v3.08.02
+    添加了FileUtils
+
+v3.08.03
+    添加了NoScrollListView, FloatViewManager, HomeKeyWatcher
+
+
+v3.08.04
+    添加了Contacts类,和1个依赖包:
+    android-vcard.jar : 对*.vcf文件的存储和读取的支持
+v3.08.05
+    添加了Contacts常用库,和pinyin4j-2.5.0.jar对汉字转拼音的支持
+
+v3.08.07
+    添加了奔溃抓捕CrashCatcher
+
+v3.08.09
+    修改了Reflect类
+
+v3.08.10
+    修改了post函数
+
+v3.08.11
+    修改了CrashWatcher
+    CrashCatcher.get().addCrashListener(new CrashCatcher.CrashListener() {
+        @Override
+        public boolean onCrash(Thread thread, Throwable throwable) {
+            CrashCatcher.storeCrashInfoToSdcard(throwable, "bluetooth", true);
+            CrashCatcher.storeCrashInfoToSdcard(throwable, "bluetooth.log", true);
+            return false;
+        }
+    });
+
+v3.9.01
+    修改了MediaUtils等类
+
+v3.9.06
+    修改了数据库SQlUtils和DbStore
+
+v3.9.07
+    修改了httputils
+
+v3.9.08
+    加入字体drawable TextDrawable
+
+v3.9.09
+    添加百家姓FamilyNames
+    修改PeriodBuffer为PeriodTask
+
+v3.9.10
+    修改了数据库,添加了checkStringArray接口
+    添加了AudioFocus
+    修改了PeriodTask,由handle处理直接变为Thread处理
+
+v3.9.12
+    添加了Regex类, 修改了FileUtils(添加了文件读写和创建接口)
+
+v3.9.13
+    修改和完善并测试了FileUtils文件的创建写入和读取的接口
+
+v3.9.18
+    添加了PostThread, 完善了SLog
+
+v3.9.19
+    给SLog添加了Object param
+
+v3.9.20
+    添加了CrashApplication
+    添加了JSon类
+
+v3.9.21
+    修改了Slog
+    修改了CrashCather
+    修改了CrashApplication
+    修改了FileUtils.write中一个错误
+
+v3.9.22
+    修改了PostThread的crash和死锁的问题
+
+v3.9.23
+    添加了traceDeepth
+    使用方式
+        Slog.setTraceDeepth(3); //打印追踪深度3,即从当点调用位置,往外依次打印3次,-1表示所有
+        Slog.e("BluetoothMusicLogic.play");
+        Slog.setTraceDeepth(0);
+    打印结果
+        ...
+        04-27 18:57:36.582 23445-23445/com.pvt.bluetooth E/dispatchTouchEvent(View.java:8582): @2
+        04-27 18:57:36.582 23445-23445/com.pvt.bluetooth E/onTouch(MusicFragment.java:55): @1
+        04-27 18:57:36.582 23445-23445/com.pvt.bluetooth E/play(BluetoothMusicLogic.java:249): BluetoothMusicLogic.play
+
+    修改了线程终止不了的问题
+        try {
+        }catch (InterruptedException e) {
+            Thread.currentThread().interrupt(); //添加
+        }
+
+        修改了Slog打印calldeepth的问题
+
+
+v4.0.00
+    修改了bindrem框架
+        1.远程变量,服务端和使用端口, 在创建变量的时候, 都必须提供一个Remoter Binder对象
+            a.服务端口
+                public class BluetoothService extends com.zeu.frame.binder.Service {
+                    @Override
+                    public Bindrem onBind(Intent intent, Context context) {
+                        BluetoothBinder binder = new BluetoothBinder(context);
+                        //与远程的共享变量,必须和远程变量拥有同样的远程binder对象
+                        mEnableState = new Int(binder, "bluetooth","enable.state", 0);
+                        mEnableState.set(1);
+                        return binder;
+                    }
+
+                    public class BluetoothBinder extends Bindrem implements IBluetoothService {
+                        public BluetoothBinder(Context context) {
+                            super(context);
+                        }
+
+                        @Override
+                        public IContactLogic getContactLogic() {
+                            return mContactLogic;
+                        }
+                    }
+                }
+
+            b.使用端口
+                Bindrem.bindService(this, "com.pvt.bluetooth", "com.pvt.BluetoothService", new ServiceConnection() {
+                    @Override
+                    public void onServiceConnected(ComponentName name, IBinder service) {
+                        mEnableState = new Int(IRemoter.Stub.asInterface(service), "bluetooth", "enable.state", 0);
+                        mEnableState.addObserver(new IntObserver() {
+                            @Override
+                            public boolean onChanged(Int anInt, Int anInt1) throws RemoteException {
+                                Slog.e("onChanged value="+anInt.get());
+                                return false;
+                            }
+                        });
+                        mEnableState.set(100);
+                    }
+
+                    @Override
+                    public void onServiceDisconnected(ComponentName name) {
+
+                    }
+                });
+
+        2.本地变量,本地变量与远程对象即使在同一个空间里面,数据也不会共享,否则增加混乱的机会
+            public Basetype(String module, String name), 对象如果支持本地Bindloc框架, 需要用到module
+
+v5.0.00
+    修改了bindrem框架，将变量的创建方式修改成简单的了, 将module在构造函数中去掉
+        1.远程变量,服务端和使用端口, 在创建变量的时候, 都必须提供一个Remoter Binder对象
+            a.服务端口
+                public class BluetoothService extends com.zeu.frame.binder.Service {
+                    @Override
+                    public Bindrem onBind(Intent intent, Context context) {
+                        BluetoothBinder binder = new BluetoothBinder(context);
+                        //与远程的共享变量,必须和远程变量拥有同样的远程binder对象
+                        mEnableState = new Int(binder,"bluetooth.enable.state", 0);
+                        mEnableState.set(1);
+                        return binder;
+                    }
+
+                    public class BluetoothBinder extends Bindrem implements IBluetoothService {
+                        public BluetoothBinder(Context context) {
+                            super(context);
+                        }
+
+                        @Override
+                        public IContactLogic getContactLogic() {
+                            return mContactLogic;
+                        }
+                    }
+                }
+
+            b.使用端口
+                Bindrem.bindService(this, "com.pvt.bluetooth", "com.pvt.BluetoothService", new ServiceConnection() {
+                    @Override
+                    public void onServiceConnected(ComponentName name, IBinder service) {
+                        mEnableState = new Int(IRemoter.Stub.asInterface(service), "bluetooth.enable.state", 0);
+                        mEnableState.addObserver(new IntObserver() {
+                            @Override
+                            public boolean onChanged(Int anInt, Int anInt1) throws RemoteException {
+                                Slog.e("onChanged value="+anInt.get());
+                                return false;
+                            }
+                        });
+                        mEnableState.set(100);
+                    }
+
+                    @Override
+                    public void onServiceDisconnected(ComponentName name) {
+
+                    }
+                });
+
+        2.本地变量,本地变量与远程对象即使在同一个空间里面,数据也不会共享,否则增加混乱的机会
+            public Basetype(String module, String name), 对象如果支持本地Bindloc框架, 需要用到module
+
+v5.0.01
+    修改了com.zeu.frame.binder.basetype.Str的比对方式
+
+v5.0.04
+    将postThread修改为postTast
+
+v5.0.05
+    修改了PostTask(postThread), 不能remove(int id)的bug
+
+v5.0.06
+    修改了PostTask, remove() 默认为, 移除不执行runnable
+
+v5.0.11
+    修改了Bindrem, 添加了一个是否执行监听的判断
+
+v5.0.12
+    给Binrem的变量添加了多线程同步处理
+    去掉了TickTask, 修改了PeiodTask
+
+v5.0.13
+    修改了PeiodTask
+
+v5.0.14
+    修改了AudioFucos和MediaUtils, 添加MediaPlay频谱接口
+
+v5.0.15
+    修复了AudioFucos.abandon接口的一个275的错误:AUDIOFOCUS_REQUEST_FAILED修改为AUDIOFOCUS_REQUEST_GRANTED
+
+v5.0.16
+    优化了FileStream的ReadThread
+    去掉了Bindloc中BindListener中的onCover(...)
+    添加了MediaManager，修改了Player
+
+v5.0.17
+    修改了MediaManager.Player
+    修改了PowerReceiver，将电源连接等设置为仅支持静态广播
+
+v5.1.00
+    简化了框架, 并添加了万能的packet和packetarray,可以传递任意继承与packet的数据结构
+    在test目录下面有service和cleint的使用模板
+
+v5.1.03
+    1.修改了同步注册只能注册一个的问题
+    2.修改了PacketArray写入类名两次的bug
+    3.修改了绑定服务的时候,内容同步
+
+v5.1.04
+    1.精简了模式,提高了效率
+    2.修复notifyDataChanged传递参数为空的bug
+
+v5.1.05
+    修复了所有xxxArray.java和Strins.java类中传递为空,不能处理的bug
+    所有的AIDL的回调函数中, 不能直接更新View, 否则可能会出现非主线程更新View的异常, 在解析AIDL协议的时候,并非在主线程中触发回调
+
+v5.1.06
+    将clone写成反射, 所有继承于Packet的类都无需重写clone函数
+    无需实现没有参数的构造函数, 给Parcel的构造函数中添加了空判断
+    将Packet clone(Object)修改成public函数
+
+v5.1.07
+    修改了notifyDataChanged中代码的bug
+    添加了notifyDataChanged需要比较是否相等的接口
+
+v5.1.08
+    修改了在创建变量的时候, 向服务注册同步回调之后, 如果内容不一致, 则需执行监听
+v5.1.09
+    去掉了其他类中的public static final Creator<Data> CREATOR = new Creator<Data>() 变量, 所有的都由Packet中继承
+    修改了框架包,添加了混淆,但是会导致Bindloc框架有问题
+
+v5.1.10(没调试)
+    添加了锁, 但只能被锁定者访问远程变量, 其他对象不能访问, 如果需要所有对象都不能访问, 可以在新创建一个不改变值的对象, 作为锁, 一旦锁定, 其他的对象都不能访问
+    添加了Parcelable数据转换成byte[]和String可以用于缓存到数据库或者文件
+
+    修改了PeriodTask中的接口
+v5.1.12
+    syncToRemote
+    添加了同步异常处理, 当同步的时候, 出现错误, 将从移除此同步监听, 因为同步监听中的函数, 为已知的框架调用,不应该被挂掉, 除非远程客户端crash了
+    添加绑定bindRemote是否覆盖已经存在的
+    修复, 远程设置, 传入不执行监听的, 但却执行监听的bug
+
+v5.1.14
+    添加了一个操作监听
+    添加了对象死了, 将其从监听中移除
+
+v5.2.00
+    1.精简了框架, 一个client对应多个Observer, 而一个center对应一个远程ISyncCallback和多给本地的ISyncCallback
+        client1<--ISyncCallback-->|
+           ... <--ISyncCallback-->|--center1<--IBinder(remote)-->|
+        clientN<--ISyncCallback-->|                              |          |<--ISyncCallback-->client1
+                                        ... <--IBinder(remote)-->|--entity--|<--ISyncCallback--> ...
+        client1<--ISyncCallback-->|                              |          |<--ISyncCallback-->clientN
+           ... <--ISyncCallback-->|--centerN<--IBinder(remote)-->|
+        clientN<--ISyncCallback-->|
+
+    2.本地和远程同样的效果
+        服务端(数据仓库):
+            public abstract class Service extends android.app.Service {
+                @Override
+                public void onCreate() {
+                    super.onCreate();
+                }
+
+                @Override
+                public IBinder onBind(Intent intent) {
+                    return Binders.getContainer();
+                }
+            }
+        客服端:
+            //创建远程连接
+            Binders mBinders = new Binders() {
+                @Override
+                public Intent onAttachRemoteService() {
+                    return new Intent().setComponent(new ComponentName("com.pvt.bluetooth", "com.pvt.blueth.server.BluetoothService")).setFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES);
+                }
+            };
+            @Override
+            public void onCreate() {
+                //连接上远程
+                mBinders.attachRemote(getApplicationContext());
+                super.onCreate();
+                new CallView(getApplicationContext());
+            }
+
+            @Override
+            public void onDestroy() {
+                //断开远程连接
+                mBinders.detachRemote();
+                super.onDestroy();
+            }
+
+v5.2.01
+    1.修改Packet和Center远程同步监听
+    2.添加变量是否支持远程标志
+
+v5.2.02
+    1.添加了Seive的显式调用
+
+v5.2.03
+    1.添加了本地attached和detached监听
+    2.添加了远程attached和detached监听
+    3.修改notifyDataChanged(boolean)无效的bug
+
+v5.2.04
+    1.修改了注册远程内容同步监听后, 第一次执行同步Callback时, 指定的对象为Conter.toString(), 无法找到对应的回调函数,也就无法调用同步数据
+    2.修改了set(packt, execObserver), 中由execObserver导致数据没同步的bug
+
+v5.2.05
+    修改notifyDataChanged(..., false)会执行监听的错误
+
+v5.2.06
+    给Packet及子类添加了handler, 如果设置了handler所有监听将会, 通过Handler.post
+
+v5.2.07
+    将Remote类修改成Container,便于理解
+
+v5.2.08
+    修改在注册远程内容同步的时候, null异常
+    添加了packet构造函数
+
+v5.2.09
+    简化了和添加了标准接口
+
+v5.2.10
+    1.简化了构造函数
+    2.修改了FileStream中的DataParseCallback中的函数为onParse
+
+v5.2.11
+    1.将setData和registerDataView等中的数据相等判断
+    2.添加Model.attach(Handler)
+
+v5.2.12
+    1.给打开移动网络-移动数据添加了注释
+    2.改PeriodTast.onFinish中添加timeout标志
+    3.修改XXXArray(ByteArray)的copy不能copy的bug,并添加了对应的构造函数
+
+v5.2.13
+    1.添加XmlStore.putFloat XmlStore.getFloat
+
+v5.2.14
+    1.修复了已本地数据为基准fucos, 将数据在连接后, 设置到远程的bug
+
+v5.2.15
+    1.修改了FloatViewManager, 让其每个layout ID都可以创建多个 悬浮窗口
+
+v5.2.16
+    1.修改了Data.set(), 添加了， 当变量没有指定唯一标识的时候的处理
+    2.此框架不作其他复杂的逻辑处理, 只是观察数据的改变, 数据改变了就会进入监听, 至于什么原因导致的数据改变, 请自己添加对应的变量或者逻辑来判断
+
+v5.2.17
+    1.添加远程绑定和本地绑定监听
+    2.给汉字转拼音Pinyin4jUtil添加设置参数
+    3.给百家姓名FamilyNames添加是否支持音标
+
+v5.2.18
+    1.添加了SwitchButton
+    2.添加了EncodeUtils
+    3.添加了XmlObject
+
+v5.2.19
+
+v5.2.20
+    将目录简化, 修改了代码的路径, 将所有的finalize去掉, 将http相关多余的类去掉, 将IPNetUtils修改为HttpUtils, 修改XmlObject, 添加了RatioMapping
+    修改了FileUtils.copy
+    添加了PermissionUtils
+
+v5.2.21
+    添加了ListMap
+    丰富了XmlObject
+
+v5.2.23
+    ApkUtils添加了资源获取函数
+
+v.5.2.24
+    添加了PlugUtils
+    修改了Reflect
+
+    缺陷:不能传递大数据, 因为要对比, 和传递PacketArray和Packet会频繁的申请和释放内存, 导致GC清扫和回收内存, 比较花时间
+    警告:Suspending all threads took
+    解决:使用简单变量或者空变量(Packet)的notifyDataChanged(Data) or notifyDataChangedAll(Data)来传递大数据, 这样可以避免频繁的申请和释放内存
+
+v.5.2.25
+    添加了PlugUtils库
+
+v.5.2.26
+    去掉了bind框架中没必要的clone和copy
+
+v5.2.27
+    添加了对startService()的支持
+
+v5.2.29
+    去掉Binder框架中的Data的setHandler接口
+    添加了noLastValue接口
+
+v5.2.30
+    添加了syncData接口, 用于将本地数据同步到远程
+    修改了数据设置和同步机制, 以本地数据为基准, 连接远程的时候以远程的数据为基准，解决当远程数据设置不成功, 本地数据不改变的bug
+
+v5.2.31
+    添加了多种ListView
+
+v5.2.33
+    修改了Plugin
+
+v5.3.00
+    去掉多余的打印, 如果数据对象比较大, 打印会很耗时，添加GC的负担
+    将Binders框架的对象数据, 传递的为索引, 节约空间, 相对v5.2.xx中的为拷贝和克隆节约空间
+
+v5.3.05
+    修改Data.setData, 如果没有设置字符串， 则不传递到底层，修改了Slog
+
+v5.3.06
+    修改了Slog中打印堆栈的问题
+
+v5.4.00
+    修改多线程同步卡死, 和同步不进入监听的问题
+    原因: 先设置本地数据, 然后再刷新仓库或者远程数据, 导致线程在本地或后台在更新数据的时候, 同时其他线程也在更新数据, 本地数据被篡改, 然后比较一直相等, 则不会触发
+    解决: 先更新仓库, 有远程的先更新远程的, 然后在远程比较数据, 如果不同, 则刷新到本地
+v5.4.01
+    修改Bug:在Data.attach(Handler)之后, 数据改变，执行监听为异步方式, 如果在执行监听之前，数据再次改变，在执行监听的时候， 传递的值为新的值， 而不是为改变时候的值
+
+v5.4.02
+    添加了module来管理数据仓库
+
+v5.4.03
+    修改了v5.4.02中队数组不支持的问题
+
+v5.4.04
+    添加了Provider， Db数据库
+
+v5.4.05
+    添加了监听清除, 以防止内存泄露
+
+v5.4.06
+    并修复一个Bug: 当Activity 被销毁(其中的数据被detach())后, 此时如果数据仓库的Service崩溃, 当Activity再次起来的时候, 数据不刷新的问题
+    protected void doDeadObjectCallback(IRemoter remote, String dataName) {
+        if (null != mDeadObjectCallback) {
+        }
+        //执行重新连接, 必须放在此处
+        mRemote = null;
+        Binders.getInstance().mAttacher.doAttachRemote(null);
+    }

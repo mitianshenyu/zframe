@@ -1,0 +1,125 @@
+支持远程
+    1.远程数据库
+        public abstract class BluetoothService extends android.app.Service {
+            public void onCreate() {
+                super.onCreate();
+                //服务启动, 通知远程对象, 重新绑定
+                getApplicationContext().sendBroadcast(new Intent("com.pvt.blueth.service.ready"));
+            }
+
+            public IBinder onBind(Intent intent) {
+                return Binders.getContainer(); //创建数据仓库
+            }
+        }
+
+    2.绑定数据服务:
+        Binders.attach(context, new ComponentName("com.pvt.bluetooth", "com.pvt.blueth.BluetoothService"), ACTION_BLUETH_SERVICE_READY);
+
+    3.远程对象:
+        public class CallInfoCall extends CallNumberInfo {
+            public int event;
+            public String address;
+            public CallInfoCall() {
+                super(null, null);
+            }
+            public CallInfoCall(CallNumberInfo info, String address, int evt) {
+                super(null, null);
+                if (null != info) {
+                    this.name = info.name;
+                    this.number = info.number;
+                }
+                this.event = evt;
+                this.address = address;
+            }
+
+            public CallInfoCall(String name) {
+                super(name);
+            }
+
+            public CallInfoCall(String name, boolean attach) {
+                super(name, null, attach);
+            }
+
+            public CallInfoCall(String name, String number, String address, int evt) {
+                super(name, number);
+                this.event = evt;
+                this.address = address;
+            }
+
+            @Override
+            public String toString() {
+                return super.toString()+ " event:"+event+ " address:"+address;
+            }
+
+            /**
+             * (Must be overloaded)
+             * @param in
+             */
+            protected CallInfoCall(android.os.Parcel in) {
+                super(in);
+                //以下非远程对象可以不用实现
+                if (null == in) return;
+                event = in.readInt();
+                address = in.readString();
+            }
+
+            /**
+             * (Must be overloaded, super.writeToParcel(...), Must be placed above the user code)
+             * aidl 依次写入函数索引,函数入口参数方向, 参数值, 然后写入定义的变量, 我的做法是在写入变量之前插入了类名
+             * 读取的顺序必须严格按照写入的顺序
+             * @param dest
+             * @param flags
+             */
+            @Override
+            public void writeToParcel(android.os.Parcel dest, int flags) { //非远程对象可以不用实现
+                super.writeToParcel(dest, flags);
+                if (null == dest) return;
+                dest.writeInt(event);
+                dest.writeString(address);
+            }
+
+            /**
+             * copy content from parcel(Must be overloaded)
+             * @param value
+             */
+            public Packet copy(Object value) {
+                super.copy(value);
+                if (value instanceof CallInfoCall) {
+                    this.address = ((CallInfoCall) value).address;
+                    this.event = ((CallInfoCall) value).event;
+                }
+                return this;
+            }
+
+            /**
+             * (Must be overloaded
+             */
+            @Override
+            public boolean equals(Object obj) {
+                if (super.equals(obj)) {
+                    String a = ""+((CallInfoCall)obj).event + ((CallInfoCall) obj).address;
+                    String b = ""+this.event + this.address;
+                    if (a.equals(b)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+        }
+
+    4.多端远程数据同步
+        客户端1:
+            public CallInfoCall CallState = new CallInfoCall("com.pvt.bluetooth.call.state&CallInfoCall");
+            CallState.attach(); //必须链接上, 链接上后与"客户端2"数据保持同步
+
+            CallState.detach(); //退出释放
+        客户端2:
+            public CallInfoCall CallState = new CallInfoCall("com.pvt.bluetooth.call.state&CallInfoCall");
+            CallState.attach(); //必须链接上
+
+            CallState.detach(); //退出释放, 链接上后与"客户端1"数据保持同步
+
+
+syncData 和notifyDataChanged, 和setData(即set)的区别
+    syncData: 将数据同步到远程, 保持一致, 和setData的作用一样
+    notifyDataChanged: 只是进入数据改变的监听, 不会同步数据, 所以在使用前, 须预先同步数据

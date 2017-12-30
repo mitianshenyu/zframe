@@ -1,0 +1,292 @@
+
+1.必须继承Packet
+    通常实现的构造函数
+        默认创库:super(variableName, (Data)null, false);
+        指定创库:super(moduleName, variableName, (Data)null, false);
+2.必须实现的函数
+    1)比较数据是否相等
+        public boolean equals(Object obj) {
+            return false;
+        }
+    2)在复制对象的时候, 所复制的对象
+        public LocationInfo copy(Object value) {
+            return this;
+        }
+
+3.支持远程必须实现的接口
+    1)从parcel中读取数据
+        protected LocationInfo(Parcel in) {
+            super(in);
+            try {
+            } catch (Exception e) {}
+        }
+
+    2)写入数据到parcel中
+        public void writeToParcel(Parcel dest, int flags) {
+            super.writeToParcel(dest, 1);
+        }
+    3)Parcelable对象的处理:传入的ClassLoader必须是从读取的对象类中获取
+        dest.writeParcelable(mInfo, 0);
+        try {
+                GpsLocation info = parcel.readParcelable(GpsLocation.LocationInfo.class.getClassLoader());
+            } catch (Exception e) {}
+    4)ParcelableArray对象的处理:传入的ClassLoader必须是从读取的对象类中获取
+        dest.writeParcelableArray(mInfos, 0);
+        try {
+                Parcelable[] parcelables = in.readParcelableArray(GpsLocation.SatelliteInfo.class.getClassLoader());
+                if (null != parcelables) {
+                    GpsLocation.SatelliteInfo[] satelliteInfos = new GpsLocation.SatelliteInfo[parcelables.length];
+                    for (int i = 0; i < satelliteInfos.length; i++) {
+                        Parcelable obj = parcelables[i];
+                        satelliteInfos[i] = (obj instanceof GpsLocation.SatelliteInfo) ? (GpsLocation.SatelliteInfo)parcelables[i] : null;
+                    }
+                    mInfos = satelliteInfos;
+                }
+        } catch (Exception e) {
+        }
+
+4.数据仓库
+    5.4.xx:
+        继承一个服务Service, 并重载onCreate和onBinder, 在onCreate中发送Service Ready广播, 表面服务已经准备好, 远程的app可以绑定, 可支持多个仓库, 每个仓库对应一个service
+        返回默认仓库: Binders.getContainer(); //
+        返回指定仓库: Binders.getContainer("xxx"), 在定义变量的时必须传入同样的仓库名称, super(moduleName, variableName, (Data)null, false);
+        public class GpsService extends Service{
+            @Override
+            public void onCreate() {
+                super.onCreate();
+                sendBroadcast(new Intent("com.zeu.gpsinfo.GpsService.Ready"));
+            }
+
+            @Override
+            public IBinder onBind(Intent intent) {
+                return Binders.getContainer(); //返回的为默认创库
+            }
+        }
+
+5.绑定到数据仓库(同进程则可以忽略):需要提供包名, 类名, 服务Ready广播
+    Binders.attach(MainActivity.this, "com.zeu.gpsinfo", "com.zeu.gpsinfo.GpsService", "com.zeu.gpsinfo.GpsService.Ready");
+
+6.接口含义对比
+    notifyDataChangedAll(); //通知数据改变,会将数据仓库的数据复制到其他数据视图
+    syncData(); //同步数据, 将本视图的数据设置到数据仓库, 并通知数据改变,会将数据仓库的数据复制到其他数据视图
+    setData(); //设置数据, 将本视图的数据设置到数据仓库, 如果数据不相等, 通知数据改变,会将数据仓库的数据复制到其他数据视图
+7.通常刷新模式
+    必须先将数据设置到仓库, 然后才能通知到其他数据视图, 同步数据, 并执行监听
+    预定义类型: Integer CallEvent = new Integer("com.pvt.bluetooth.call.event&Integer", 0);
+        CallEvent.set(CallModel.CALL_EVENT_ACCEPT); //设置到数据仓库
+        或
+        CallEvent.set(CallModel.CALL_EVENT_ACCEPT, false); //设置到数据仓库
+        CallEvent.notifyDataChangedAll(getCallInfo()); //通知数据
+    自定义类型: CallInfoCall CallState = new CallInfoCall("com.pvt.bluetooth.call.state&CallInfoCall");
+        CallState.set(new CallInfoCall(info, device.getAddress(), CallModel.CALL_STATE_ALERTING));
+        或
+        CallState.set(new CallInfoCall(info, device.getAddress(), CallModel.CALL_STATE_ALERTING), false);
+        CallState.notifyDataChangedAll();
+        或
+        CallState.state = 19;
+        CallState.syncData();
+        或
+        CallState.state = 19;
+        CallState.set(CallState);
+
+8.例子
+    1.基本数据类
+        public class CallNumberInfo extends Packet {
+            public String name;
+            public String number;
+
+            public CallNumberInfo(String name) {
+                super(name, (Data)null, false);
+            }
+
+            public CallNumberInfo(String name, boolean attach) {
+                super(name, (Data)null, attach);
+            }
+
+            public CallNumberInfo(String name, String number) {
+                this(name, number, false);
+            }
+
+            public CallNumberInfo(String name, String number, boolean attach) {
+                super(name);
+                this.name = name;
+                this.number = number;
+                if(attach) {
+                    this.attach();
+                }
+
+            }
+
+            protected CallNumberInfo(Parcel in) {
+                super(in);
+                if(null != in) {
+                    this.name = in.readString();
+                    this.number = in.readString();
+                }
+            }
+
+            public String toString() {
+                return "name:" + this.name + " number:" + this.number;
+            }
+
+            public void writeToParcel(Parcel dest, int flags) {
+                super.writeToParcel(dest, 1);
+                if(null != dest) {
+                    dest.writeString(this.name);
+                    dest.writeString(this.number);
+                }
+            }
+
+            public Packet copy(Object value) {
+                if(value instanceof CallNumberInfo) {
+                    this.name = ((CallNumberInfo)value).name;
+                    this.number = ((CallNumberInfo)value).number;
+                }
+
+                return this;
+            }
+
+            public boolean equals(Object obj) {
+                if(obj instanceof CallNumberInfo) {
+                    String a = "" + ((CallNumberInfo)obj).name + ((CallNumberInfo)obj).number;
+                    String b = "" + this.name + this.number;
+                    if(a.equals(b)) {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+        }
+    2.引用数据类
+        public class LocationInfo extends Packet {
+            public GpsLocation.LocationInfo mInfo;
+            public LocationInfo(String name, boolean attach) {
+                super(name, null, attach);
+            }
+
+            public void setLocationInfo(GpsLocation.LocationInfo info) {
+                mInfo = info;
+                set(this);
+            }
+
+            protected LocationInfo(Parcel in) {
+                super(in);
+                try {
+                    mInfo = in.readParcelable(GpsLocation.LocationInfo.class.getClassLoader());
+                } catch (Exception e) {}
+            }
+
+            public void writeToParcel(Parcel dest, int flags) {
+                super.writeToParcel(dest, 1);
+                if(null != dest) {
+                    dest.writeParcelable(mInfo, 0);
+                }
+            }
+
+            public LocationInfo copy(Object value) {
+                if(value instanceof LocationInfo) {
+                    mInfo = ((LocationInfo) value).mInfo;
+                } else if(value instanceof GpsLocation.LocationInfo) {
+                    mInfo = (GpsLocation.LocationInfo) value;
+                }
+                return this;
+            }
+
+            public boolean equals(Object obj) {
+                if(obj instanceof LocationInfo) {
+                    if (null == mInfo) {
+                        return null == ((LocationInfo) obj).mInfo;
+                    } else {
+                        return mInfo.equals(((LocationInfo) obj).mInfo);
+                    }
+                } else if(obj instanceof GpsLocation.LocationInfo) {
+                    if (null != mInfo) {
+                        return mInfo.equals(obj);
+                    }
+                }
+                return false;
+            }
+        }
+
+    3)数组类
+        public class SatelliteInfo extends Packet {
+            public GpsLocation.SatelliteInfo[] mInfos;
+            public SatelliteInfo(String name, boolean attach) {
+                super(name, null, attach);
+            }
+
+            public void setLocationInfo(GpsLocation.SatelliteInfo[] infos) {
+                mInfos = infos;
+                set(this);
+            }
+
+            public int getUsedSatelliteNumber() {
+                int usedNumber = 0;
+                if (null != mInfos) {
+                    for (GpsLocation.SatelliteInfo satelliteInfo : mInfos) {
+                        if (null != satelliteInfo && satelliteInfo.used) {
+                            usedNumber++;
+                        }
+                    }
+                }
+                return usedNumber;
+            }
+
+            public int getTotalSatelliteNumber() {
+                return null != mInfos ? mInfos.length : 0;
+            }
+
+            protected SatelliteInfo(Parcel in) {
+                super(in);
+                try {
+                    Parcelable[] parcelables = in.readParcelableArray(GpsLocation.SatelliteInfo.class.getClassLoader());
+                    if (null != parcelables) {
+                        GpsLocation.SatelliteInfo[] satelliteInfos = new GpsLocation.SatelliteInfo[parcelables.length];
+                        for (int i = 0; i < satelliteInfos.length; i++) {
+                            Parcelable obj = parcelables[i];
+                            satelliteInfos[i] = (obj instanceof GpsLocation.SatelliteInfo) ? (GpsLocation.SatelliteInfo)parcelables[i] : null;
+                        }
+                        mInfos = satelliteInfos;
+                    }
+                } catch (Exception e) {
+                }
+            }
+
+            public void writeToParcel(Parcel dest, int flags) {
+                super.writeToParcel(dest, 1);
+                if(null != dest) {
+                    dest.writeParcelableArray(mInfos, 0);
+                }
+            }
+
+            public SatelliteInfo copy(Object value) {
+                if(value instanceof SatelliteInfo) {
+                    mInfos = ((SatelliteInfo) value).mInfos;
+                } else if(value instanceof GpsLocation.SatelliteInfo[]) {
+                    mInfos = (GpsLocation.SatelliteInfo[]) value;
+                }
+                return this;
+            }
+
+            public boolean equals(Object obj) {
+                if(obj instanceof SatelliteInfo) {
+                    if (null == mInfos) {
+                        return null == ((SatelliteInfo) obj).mInfos;
+                    } else if (null != ((SatelliteInfo) obj).mInfos && mInfos.length == ((SatelliteInfo) obj).mInfos.length){
+                        for (int i = 0; i < mInfos.length; i++) {
+                            GpsLocation.SatelliteInfo info = mInfos[i];
+                            GpsLocation.SatelliteInfo comp = ((SatelliteInfo) obj).mInfos[i];
+                            if (null == info) {
+                                if (null != comp) {
+                                    break;
+                                }
+                            } else if (!info.equals(comp)) {
+                                break;
+                            }
+                        }
+                    }
+                }
+                return false;
+            }
+        }
