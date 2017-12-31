@@ -19,6 +19,7 @@ import com.zeu.frame.bind.comm.ILockerSource;
 import com.zeu.frame.bind.comm.IRemoter;
 import com.zeu.frame.bind.comm.IRemoter.Stub;
 import com.zeu.frame.bind.listener.OnRemoteAttachListener;
+import com.zeu.frame.bind.observer.IDataChangedObserver;
 import com.zeu.frame.bind.observer.IPacketObserver;
 import com.zeu.frame.log.Slog;
 import com.zeu.frame.log.Slog.Type;
@@ -237,226 +238,94 @@ public class Binders {
             return data;
         }
 
-        /* JADX WARNING: inconsistent code. */
-        /* Code decompiled incorrectly, please refer to instructions dump. */
-        public boolean setData(String r19, String r20, com.zeu.frame.bind.observer.IDataChangedObserver r21, boolean r22, boolean r23, Data r24, Data r25) throws RemoteException {
-            /*
-            r18 = this;
-            r16 = 0;
-            r3 = 2;
-            r4 = new java.lang.String[r3];
-            r3 = 0;
-            r5 = new java.lang.StringBuilder;
-            r5.<init>();
-            r6 = "setData:entry";
-            r5 = r5.append(r6);
-            r0 = r19;
-            r5 = r5.append(r0);
-            r5 = r5.toString();
-            r4[r3] = r5;
-            r5 = 1;
-            r0 = r24;
-            r3 = r0 instanceof com.zeu.frame.bind.Packet;
-            if (r3 == 0) goto L_0x004c;
-        L_0x0024:
-            r3 = "";
-        L_0x0026:
-            r4[r5] = r3;
-            com.zeu.frame.log.Slog.d(r4);
-            if (r19 == 0) goto L_0x0109;
-        L_0x002d:
-            r3 = r18.isRemoteAttached();
-            if (r3 == 0) goto L_0x0071;
-        L_0x0033:
-            r0 = r18;
-            r2 = r0.mRemote;	 Catch:{ DeadObjectException -> 0x0062, Exception -> 0x00bb }
-            r3 = r19;
-            r4 = r20;
-            r5 = r21;
-            r6 = r22;
-            r7 = r23;
-            r8 = r24;
-            r9 = r25;
-            r16 = r2.setData(r3, r4, r5, r6, r7, r8, r9);	 Catch:{ DeadObjectException -> 0x0062, Exception -> 0x00bb }
-            r3 = r16;
-        L_0x004b:
-            return r3;
-        L_0x004c:
-            r3 = new java.lang.StringBuilder;
-            r3.<init>();
-            r6 = "data:";
-            r3 = r3.append(r6);
-            r0 = r24;
-            r3 = r3.append(r0);
-            r3 = r3.toString();
-            goto L_0x0026;
-        L_0x0062:
-            r12 = move-exception;
-            r12.printStackTrace();
-            r0 = r18;
-            r3 = r0.mRemote;
-            r0 = r18;
-            r1 = r19;
-            r0.doDeadObjectCallback(r3, r1);
-        L_0x0071:
-            r0 = r18;
-            r4 = r0.mCenters;
-            monitor-enter(r4);
-            r0 = r18;
-            r3 = r0.mCenters;	 Catch:{ all -> 0x00c2 }
-            r0 = r19;
-            r2 = r3.get(r0);	 Catch:{ all -> 0x00c2 }
-            r2 = (com.zeu.frame.bind.Binders.Entity) r2;	 Catch:{ all -> 0x00c2 }
-            monitor-exit(r4);	 Catch:{ all -> 0x00c2 }
-            if (r2 == 0) goto L_0x0109;
-        L_0x0085:
-            monitor-enter(r2);
-            r15 = r2.mLocalLockers;	 Catch:{ all -> 0x00c5 }
-            monitor-exit(r2);	 Catch:{ all -> 0x00c5 }
-            monitor-enter(r15);
-            r3 = r15.isEmpty();	 Catch:{ all -> 0x00b8 }
-            if (r3 != 0) goto L_0x00d3;
-        L_0x0090:
-            r3 = new java.util.LinkedList;	 Catch:{ all -> 0x00b8 }
-            r4 = r15.entrySet();	 Catch:{ all -> 0x00b8 }
-            r3.<init>(r4);	 Catch:{ all -> 0x00b8 }
-            r13 = r3.getLast();	 Catch:{ all -> 0x00b8 }
-            r13 = (java.util.Map.Entry) r13;	 Catch:{ all -> 0x00b8 }
-            if (r13 == 0) goto L_0x00d3;
-        L_0x00a1:
-            r3 = r13.getValue();	 Catch:{ all -> 0x00b8 }
-            if (r3 == 0) goto L_0x0118;
-        L_0x00a7:
-            r3 = r13.getValue();	 Catch:{ DeadObjectException -> 0x00c8 }
-            r3 = (com.zeu.frame.bind.comm.ILockerSource) r3;	 Catch:{ DeadObjectException -> 0x00c8 }
-            r3 = r3.lockerName();	 Catch:{ DeadObjectException -> 0x00c8 }
-            r0 = r20;
-            if (r0 == r3) goto L_0x00d3;
-        L_0x00b5:
-            r3 = 0;
-            monitor-exit(r15);	 Catch:{ all -> 0x00b8 }
-            goto L_0x004b;
-        L_0x00b8:
-            r3 = move-exception;
-            monitor-exit(r15);	 Catch:{ all -> 0x00b8 }
-            throw r3;
-        L_0x00bb:
-            r12 = move-exception;
-            r12.printStackTrace();
-            r3 = r16;
-            goto L_0x004b;
-        L_0x00c2:
-            r3 = move-exception;
-            monitor-exit(r4);	 Catch:{ all -> 0x00c2 }
-            throw r3;
-        L_0x00c5:
-            r3 = move-exception;
-            monitor-exit(r2);	 Catch:{ all -> 0x00c5 }
-            throw r3;
-        L_0x00c8:
-            r12 = move-exception;
-            r12.printStackTrace();	 Catch:{ all -> 0x00b8 }
-            r3 = r13.getKey();	 Catch:{ all -> 0x00b8 }
-            r15.remove(r3);	 Catch:{ all -> 0x00b8 }
-        L_0x00d3:
-            monitor-exit(r15);	 Catch:{ all -> 0x00b8 }
-            r14 = 0;
-            r17 = 0;
-            monitor-enter(r2);
-            r10 = r2.mData;	 Catch:{ all -> 0x0120 }
-            monitor-exit(r2);	 Catch:{ all -> 0x0120 }
-            if (r10 != 0) goto L_0x0123;
-        L_0x00dd:
-            if (r24 == 0) goto L_0x00e4;
-        L_0x00df:
-            r14 = 0;
-            r17 = 1;
-            r10 = r24;
-        L_0x00e4:
-            monitor-enter(r2);
-            r2.mData = r10;	 Catch:{ all -> 0x0141 }
-            monitor-exit(r2);	 Catch:{ all -> 0x0141 }
-            if (r17 == 0) goto L_0x0109;
-        L_0x00ea:
-            if (r21 == 0) goto L_0x00f3;
-        L_0x00ec:
-            r0 = r21;
-            r1 = r25;
-            r0.onChanged(r10, r14, r1);	 Catch:{ DeadObjectException -> 0x0144 }
-        L_0x00f3:
-            r3 = 0;
-            r4 = 1;
-            r5 = 0;
-            r7 = 0;
-            r6 = r22;
-            r8 = r25;
-            com.zeu.frame.bind.Binders.syncToDataViews(r2, r3, r4, r5, r6, r7, r8);
-            r3 = 0;
-            r4 = 1;
-            r5 = 0;
-            r7 = 0;
-            r6 = r22;
-            r8 = r25;
-            com.zeu.frame.bind.Binders.syncToRemoteContainer(r2, r3, r4, r5, r6, r7, r8);
-        L_0x0109:
-            r3 = 1;
-            r3 = new java.lang.String[r3];
-            r4 = 0;
-            r5 = "setData:exit";
-            r3[r4] = r5;
-            com.zeu.frame.log.Slog.d(r3);
-            r3 = r16;
-            goto L_0x004b;
-        L_0x0118:
-            r3 = r13.getKey();	 Catch:{ all -> 0x00b8 }
-            r15.remove(r3);	 Catch:{ all -> 0x00b8 }
-            goto L_0x00d3;
-        L_0x0120:
-            r3 = move-exception;
-            monitor-exit(r2);	 Catch:{ all -> 0x0120 }
-            throw r3;
-        L_0x0123:
-            r0 = r24;
-            r3 = r10.equals(r0);
-            if (r3 != 0) goto L_0x00e4;
-        L_0x012b:
-            monitor-enter(r10);
-            r3 = r10 instanceof com.zeu.frame.bind.Packet;	 Catch:{ all -> 0x013d }
-            if (r3 == 0) goto L_0x0132;
-        L_0x0130:
-            if (r23 == 0) goto L_0x0136;
-        L_0x0132:
-            r14 = com.zeu.frame.bind.Data.clone(r10);	 Catch:{ all -> 0x013d }
-        L_0x0136:
-            r11 = r24;
-            r17 = 1;
-            monitor-exit(r10);	 Catch:{ all -> 0x0154 }
-            r10 = r11;
-            goto L_0x00e4;
-        L_0x013d:
-            r3 = move-exception;
-            r11 = r10;
-        L_0x013f:
-            monitor-exit(r10);	 Catch:{ all -> 0x0154 }
-            throw r3;
-        L_0x0141:
-            r3 = move-exception;
-            monitor-exit(r2);	 Catch:{ all -> 0x0141 }
-            throw r3;
-        L_0x0144:
-            r12 = move-exception;
-            r12.printStackTrace();
-            r0 = r18;
-            r3 = r0.mRemote;
-            r0 = r18;
-            r1 = r19;
-            r0.doDeadObjectCallback(r3, r1);
-            goto L_0x00f3;
-        L_0x0154:
-            r3 = move-exception;
-            goto L_0x013f;
-            */
-            throw new UnsupportedOperationException("Method not decompiled: com.zeu.frame.bind.Binders.Container.setData(java.lang.String, java.lang.String, com.zeu.frame.bind.observer.IDataChangedObserver, boolean, boolean, com.zeu.frame.bind.Data, com.zeu.frame.bind.Data):boolean");
+        @Override
+        public boolean setData(String dataName, String setterSource, IDataChangedObserver observer, boolean execListener, boolean lastValueEnabled, Data value, Data param) throws RemoteException {
+            boolean ret = false;
+            if (null != dataName) {
+                if (isRemoteAttached()) {
+                    try {
+                        ret = mRemote.setData(dataName, setterSource, observer, execListener, lastValueEnabled, value, param);
+                        return ret;
+                    } catch (DeadObjectException e) {
+                        e.printStackTrace();
+                        doDeadObjectCallback(mRemote, dataName);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        return ret;
+                    }
+                }
+
+                Entity entity;
+                synchronized (mCenters) {
+                    entity = mCenters.get(dataName);
+                }
+                if (null != entity) {
+                    LinkedHashMap<String, ILockerSource> localLockers;
+                    synchronized (entity) {
+                        localLockers = entity.mLocalLockers;
+                    }
+
+                    synchronized (localLockers) {
+                        if (!localLockers.isEmpty()) {
+                            Map.Entry<String, ILockerSource> entry = new LinkedList<>(localLockers.entrySet()).getLast();
+                            if (null != entry) {
+                                if (entry.getValue() != null) {
+                                    try {
+                                        if (setterSource != entry.getValue().lockerName()) {//锁存在, 但锁不正确
+                                            return false;
+                                        }
+                                    } catch (DeadObjectException e) {//锁销毁, 无效
+                                        e.printStackTrace();
+                                        localLockers.remove(entry.getKey());
+                                    }
+                                } else {//锁为空, 无效
+                                    localLockers.remove(entry.getKey());
+                                }
+                            }
+                        }
+                    }
+
+                    Data last = null, curr;
+                    boolean unequal = false;
+                    synchronized (entity) {
+                        curr = entity.mData;
+                    }
+                    if (null == curr) {
+                        if (null != value) {
+                            last = null;
+                            unequal = true;
+                            curr = value;
+                        }
+                    } else if (!curr.equals(value)) {
+                        synchronized (curr) {
+                            if (!(curr instanceof Packet) || lastValueEnabled) {
+                                last = curr.clone(curr);
+                            }
+                            curr = value;
+                            unequal = true;
+                        }
+                    }
+
+                    synchronized (entity) {
+                        entity.mData = curr;
+                    }
+
+                    if (unequal) {
+                        if (null != observer) {
+                            try {
+                                observer.onChanged(curr, last, param);
+                            } catch (DeadObjectException e) {
+                                e.printStackTrace();
+                                doDeadObjectCallback(mRemote, dataName);
+                            }
+                        }
+
+                        syncToDataViews(entity, null, true, null, execListener, null, param);
+                        syncToRemoteContainer(entity, null, true, null, execListener, null, param);
+                    }
+                }
+            }
+            return ret;
         }
 
         public boolean registerDataView(String dataName, String dataView, DataViewCallback callback, Data value, boolean focus, boolean supportRemote) {
