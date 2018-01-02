@@ -3,70 +3,81 @@ package com.zeu.frame.bind;
 import android.os.Handler;
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.os.Parcelable.Creator;
 import android.os.RemoteException;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
-import com.zeu.frame.BuildConfig;
-import com.zeu.frame.bind.Binders.Container;
+
 import com.zeu.frame.bind.callback.DataViewCallback;
-import com.zeu.frame.bind.comm.ILockerSource.Stub;
+import com.zeu.frame.bind.comm.ILockerSource;
 import com.zeu.frame.bind.comm.IRemoter;
 import com.zeu.frame.bind.listener.OnLocalAttachListener;
 import com.zeu.frame.bind.listener.OnRemoteAttachListener;
 import com.zeu.frame.bind.observer.DataChangedObserver;
 import com.zeu.frame.log.Slog;
+
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Created by zeu on 2016/11/29.
+ * 此为数据视图
+ */
 public class Data<OBSERVER> implements DataViewCallback, Parcelable {
-    public static final Creator<Data> CREATOR = new Creator<Data>() {
-        public Data createFromParcel(Parcel in) {
-            return (Data) Binders.createObjFromParcel(in);
-        }
-
-        public Data[] newArray(int size) {
-            return new Data[size];
-        }
-    };
-    protected boolean mEnableLastValue;
-    protected Handler mHandler;
-    protected List<OBSERVER> mLocalObservers;
+    /**
+     * 所有的数据, 先设置本地的, 然后再将数据同步到远程, 修改远程的， 如果 本地和远程断开连接, 则在连接上远程的时候, 以远程数据为基准
+     */
+    protected Object mValue;
     protected String mLocker;
-    OnLocalAttachListener mOnLocalAttachListener;
-    OnRemoteAttachListener mOnRemoteAttachListener;
-    protected boolean mSupportRemote;
+    protected Handler mHandler;
     protected String mThisDataName;
     protected String mThisModuleName;
-    protected Object mUniqueName;
-    protected Object mValue;
+    //是否支持IBinder的远程数据(AIDL)
+    protected boolean mSupportRemote = true;
+    //默认不计算LastValue, 应为LastValue, 在传递大数据的时候, 容易造成GC卡顿
+    protected boolean mEnableLastValue = false;
+    protected Object mUniqueName = new Object();
+    OnLocalAttachListener mOnLocalAttachListener;
+    OnRemoteAttachListener mOnRemoteAttachListener;
+    protected List<OBSERVER> mLocalObservers = new ArrayList<>(); //所有注册的, 将在添加到本地
 
     public Data() {
-        this.mSupportRemote = true;
-        this.mEnableLastValue = false;
-        this.mUniqueName = new Object();
-        this.mLocalObservers = new ArrayList();
     }
 
     public Data(String name) {
-        this(BuildConfig.FLAVOR, name);
+        this("", name);
     }
 
+    /**
+     * 默认不连接到后台
+     * @param name
+     * @param value
+     */
     protected Data(String name, Object value) {
-        this(BuildConfig.FLAVOR, name, value, false);
+        this("", name, value, false);
     }
 
     protected Data(String name, Object value, boolean attach) {
-        this(BuildConfig.FLAVOR, name, value, attach, false);
+        this("", name, value, attach, false);
     }
 
+    /**
+     * @param name
+     * @param value 值
+     * @param attach 是否连接, 默认不连接
+     * @param focus 以此数据为准, 连接上远程的时候, 会将本地址设置到远程
+     */
     protected Data(String name, Object value, boolean attach, boolean focus) {
-        this(BuildConfig.FLAVOR, name, value, attach, focus);
+        this("", name, value, attach, focus);
     }
 
+    /**
+     * 默认不连接到后台
+     * @param name
+     * @param value
+     */
     protected Data(String module, String name, Object value) {
         this(module, name, value, false);
     }
@@ -75,6 +86,12 @@ public class Data<OBSERVER> implements DataViewCallback, Parcelable {
         this(module, name, value, attach, false);
     }
 
+    /**
+     * @param name
+     * @param value 值
+     * @param attach 是否连接, 默认不连接
+     * @param focus 以此数据为准, 连接上远程的时候, 会将本地址设置到远程
+     */
     protected Data(String module, String name, Object value, boolean attach, boolean focus) {
         this(module, name);
         copy(value);
@@ -84,93 +101,94 @@ public class Data<OBSERVER> implements DataViewCallback, Parcelable {
     }
 
     public Data(String module, String name) {
-        this.mSupportRemote = true;
-        this.mEnableLastValue = false;
-        this.mUniqueName = new Object();
-        this.mLocalObservers = new ArrayList();
-        this.mThisDataName = name;
-        this.mThisModuleName = module;
+        mThisDataName = name;
+        mThisModuleName = module;
     }
 
     public void setHandler(Handler handler) {
-        this.mHandler = handler;
+        mHandler = handler;
     }
 
+    /**
+     * 同步数据
+     * @param dataView 与yesSelfNoOther一起判断是否执行监听
+     * @param yesSelfNoOther
+     * @param curr
+     * @param param
+     * @param execObserver
+     * @return
+     * @throws RemoteException
+     */
+
+    @Override
     public boolean onChanged(String dataName, String dataView, boolean yesSelfNoOther, Data curr, Data param, boolean execObserver) {
-        String[] strArr = new String[5];
-        strArr[0] = "sync from remote:";
-        strArr[1] = "data:" + dataName;
-        strArr[2] = "view:" + dataView;
-        strArr[3] = "yesSelfNoOther:" + yesSelfNoOther;
-        strArr[4] = curr instanceof Packet ? BuildConfig.FLAVOR : "data:" + curr;
-        Slog.d(strArr);
-        if (dataView != null && ((!yesSelfNoOther || !dataView.equals(string())) && (yesSelfNoOther || dataView.equals(string())))) {
-            return false;
-        }
-        if (execObserver) {
-            Data last;
-            if (!(this instanceof Packet) || this.mEnableLastValue) {
-                last = clone(this);
+        Slog.d("sync from remote:", "data:"+dataName, "view:"+dataView, "yesSelfNoOther:"+yesSelfNoOther, (curr instanceof Packet)?"":("data:"+curr));
+        if (null == dataView || (yesSelfNoOther && dataView.equals(string())) || (!yesSelfNoOther && !dataView.equals(string()))) {
+            if (execObserver) {
+                Data last = (!(this instanceof Packet) || mEnableLastValue) ? clone(this) : null;
+                if (null != curr && null != curr.mValue) {
+                    mValue = curr.mValue; //对象数据, 只传递引用
+                } else {
+                    copy(curr);  //基本数据, 复制数据
+                }
+                execLocalObservers(null, true, Data.this, last, param);
             } else {
-                last = null;
+                if (null != curr && null != curr.mValue) {
+                    mValue = curr.mValue; //对象数据, 只传递引用
+                } else {
+                    copy(curr);  //基本数据, 复制数据
+                }
             }
-            if (curr == null || curr.mValue == null) {
-                copy(curr);
-            } else {
-                this.mValue = curr.mValue;
-            }
-            execLocalObservers(null, true, this, last, param);
-            return true;
-        } else if (curr == null || curr.mValue == null) {
-            copy(curr);
-            return true;
-        } else {
-            this.mValue = curr.mValue;
             return true;
         }
+        return false;
     }
 
+    @Override
     public void onLocalAttach() {
-        if (this.mOnLocalAttachListener != null) {
-            this.mOnLocalAttachListener.onAttached();
+        if (null != mOnLocalAttachListener) {
+            mOnLocalAttachListener.onAttached();
         }
     }
 
+    @Override
     public void onLocalDetach() {
-        if (this.mOnLocalAttachListener != null) {
-            this.mOnLocalAttachListener.onDetached();
+        if (null != mOnLocalAttachListener) {
+            mOnLocalAttachListener.onDetached();
         }
     }
 
+    @Override
     public void onRemoteAttach(IRemoter remoter) {
-        if (this.mOnRemoteAttachListener != null) {
-            this.mOnRemoteAttachListener.onAttached(remoter);
+        if (null != mOnRemoteAttachListener) {
+            mOnRemoteAttachListener.onAttached(remoter);
         }
     }
 
+    @Override
     public void onRemoteDetach(IRemoter remoter) {
-        if (this.mOnRemoteAttachListener != null) {
-            this.mOnRemoteAttachListener.onDetached(remoter);
+        if (null != mOnRemoteAttachListener) {
+            mOnRemoteAttachListener.onDetached(remoter);
         }
     }
 
     public void setOnLocalAttachListener(OnLocalAttachListener listener) {
-        this.mOnLocalAttachListener = listener;
+        mOnLocalAttachListener = listener;
     }
 
     public void setOnRemoteAttachListener(OnRemoteAttachListener listener) {
-        this.mOnRemoteAttachListener = listener;
+        mOnRemoteAttachListener = listener;
     }
 
     public void attach(String module, Handler handler, boolean fucos) {
-        if (module != null) {
-            this.mThisModuleName = module;
+        if (null != module) {
+            mThisModuleName = module;
         }
-        Container container = Binders.getContainer(this.mThisModuleName);
-        if (container != null) {
-            container.registerDataView(this.mThisDataName, string(), this, this, fucos, true);
+        Binders.Container container = Binders.getContainer(mThisModuleName);
+        if (null != container) {
+            container.registerDataView(mThisDataName, string(), this, this, fucos, true);
         }
-        this.mHandler = handler;
+        mHandler = handler;
     }
 
     public void attach(String module, boolean fucos) {
@@ -198,9 +216,9 @@ public class Data<OBSERVER> implements DataViewCallback, Parcelable {
     }
 
     public void detach(boolean removeAllObservers) {
-        Container container = Binders.getContainer(this.mThisModuleName);
-        if (container != null) {
-            container.unregisterDataView(this.mThisDataName, string());
+        Binders.Container container = Binders.getContainer(mThisModuleName);
+        if (null != container) {
+            container.unregisterDataView(mThisDataName, string());
         }
         if (removeAllObservers) {
             clearObservers();
@@ -212,37 +230,36 @@ public class Data<OBSERVER> implements DataViewCallback, Parcelable {
     }
 
     public String name() {
-        return this.mThisDataName;
+        return mThisDataName;
     }
 
+    /**
+     * 设置值
+     * @param value 值
+     * @param observer 临时监听
+     * @param exeObserver 不执行注册过的监听
+     * @return
+     */
     protected boolean setData(Object value, DataChangedObserver observer, boolean exeObserver, Data param) {
         boolean ret = false;
-        String[] strArr = new String[2];
-        strArr[0] = "setData:" + this.mThisDataName;
-        strArr[1] = value instanceof Packet ? BuildConfig.FLAVOR : "data:" + value;
-        Slog.d(strArr);
-        if (this.mThisDataName != null) {
-            Container container = Binders.getContainer(this.mThisModuleName);
-            if (container != null) {
+        Slog.d("setData:"+mThisDataName, (value instanceof Packet)?"":("data:"+value));
+        if (null != mThisDataName) {//先将数据, 与本地数据仓库, 比对之后, 再决定是否同步数据和执行监听
+            Binders.Container container = Binders.getContainer(mThisModuleName);
+            if (null != container) {
                 try {
-                    ret = container.setData(this.mThisDataName, string(), observer, exeObserver, this.mEnableLastValue, create(this).copy(value), param);
+                    ret = container.setData(mThisDataName, string(), observer, exeObserver, mEnableLastValue, create(this).copy(value), param);
                 } catch (RemoteException e) {
                     e.printStackTrace();
                 }
             }
-        } else if (!(this == value || equals(value))) {
-            Data last;
-            if (!(this instanceof Packet) || this.mEnableLastValue) {
-                last = clone(this);
+        } else if (this != value && !equals(value)) {//没有设置字符串, 当作本地对象, 不相等 进入监听
+            Data last = (!(this instanceof Packet) || mEnableLastValue) ? clone(this) : null;
+            if (null == mValue) {
+                copy(value); //基本数据, 复制数据
             } else {
-                last = null;
+                mValue = value; //对象数据, 只传递引用
             }
-            if (this.mValue == null) {
-                copy(value);
-            } else {
-                this.mValue = value;
-            }
-            execLocalObservers(null, exeObserver, this, last, param);
+            execLocalObservers(null, exeObserver, Data.this, last, param);
         }
         return ret;
     }
@@ -270,13 +287,28 @@ public class Data<OBSERVER> implements DataViewCallback, Parcelable {
     public boolean set(Data value, Data param) {
         return setData(value, null, true, param);
     }
-
+    /**
+     * 通知数据改变, 不会同步本地数据, 只会执行监听
+     * @param dataView
+     *      仓库服务端,通过一个String,维护一个对象,其可以与多个应用共享,而每个应用可以控制数据的改变通知
+     *      dataView == null : 将会通知所有对象
+     *      dataView != null :
+     *          selfOrOther == true : 通知自己
+     *          selfOrOther == false: 通知除自己之外的对象
+     * @param onlySelf
+     *          false : 通知除自己之外的对象
+     *          true: 通知自己
+     * @param toCompareValue
+     *          在通知的时候可以传入比对的值,如果不想等则执行通知
+     * @param param
+     *          传入参数
+     */
     public void notifyDataChanged(String dataView, boolean onlySelf, Data toCompareValue, Data param) {
-        if (this.mThisDataName != null) {
-            Container container = Binders.getContainer(this.mThisModuleName);
-            if (container != null) {
+        if (null != mThisDataName) {
+            Binders.Container container = Binders.getContainer(mThisModuleName);
+            if (null != container) {
                 try {
-                    container.notifyDataChanged(this.mThisDataName, dataView, true, onlySelf, this.mEnableLastValue, toCompareValue, param);
+                    container.notifyDataChanged(mThisDataName, dataView, true, onlySelf, mEnableLastValue, toCompareValue, param);
                 } catch (RemoteException e) {
                     e.printStackTrace();
                 }
@@ -289,7 +321,7 @@ public class Data<OBSERVER> implements DataViewCallback, Parcelable {
     }
 
     public void notifyDataChangedAll(boolean compareWithRemote, Data param) {
-        notifyDataChangedAll(compareWithRemote ? this : null, param);
+        notifyDataChangedAll(compareWithRemote?this:null, param);
     }
 
     public void notifyDataChangedAll(Data param) {
@@ -297,13 +329,7 @@ public class Data<OBSERVER> implements DataViewCallback, Parcelable {
     }
 
     public void notifyDataChangedAll(boolean compareWithRemote) {
-        Data data;
-        if (compareWithRemote) {
-            data = this;
-        } else {
-            data = null;
-        }
-        notifyDataChangedAll(data, null);
+        notifyDataChangedAll(compareWithRemote?this:null, null);
     }
 
     public void notifyDataChangedAll() {
@@ -315,7 +341,7 @@ public class Data<OBSERVER> implements DataViewCallback, Parcelable {
     }
 
     public void notifyDataChanged(boolean onlySelf, boolean compareWithRemote, Data param) {
-        notifyDataChanged(onlySelf, compareWithRemote ? this : null, param);
+        notifyDataChanged(onlySelf, compareWithRemote?this:null, param);
     }
 
     public void notifyDataChanged(boolean onlySelf, Data param) {
@@ -323,13 +349,7 @@ public class Data<OBSERVER> implements DataViewCallback, Parcelable {
     }
 
     public void notifyDataChanged(boolean onlySelf, boolean compareWithRemote) {
-        Data data;
-        if (compareWithRemote) {
-            data = this;
-        } else {
-            data = null;
-        }
-        notifyDataChanged(onlySelf, data, null);
+        notifyDataChanged(onlySelf, compareWithRemote?this:null, null);
     }
 
     public void notifyDataChanged(boolean onlySelf) {
@@ -337,11 +357,12 @@ public class Data<OBSERVER> implements DataViewCallback, Parcelable {
     }
 
     public boolean lock() {
-        if (this.mThisDataName != null && this.mLocker == null) {
-            Container container = Binders.getContainer(this.mThisModuleName);
-            if (container != null) {
+        if (null != mThisDataName && null == mLocker) {
+            Binders.Container container = Binders.getContainer(mThisModuleName);
+            if (null != container) {
                 try {
-                    this.mLocker = container.lock(this.mThisDataName, new Stub() {
+                    mLocker = container.lock(mThisDataName, new ILockerSource.Stub() {
+                        @Override
                         public String lockerName() throws RemoteException {
                             return Data.this.string();
                         }
@@ -351,19 +372,16 @@ public class Data<OBSERVER> implements DataViewCallback, Parcelable {
                 }
             }
         }
-        if (this.mLocker != null) {
-            return true;
-        }
-        return false;
+        return (null != mLocker);
     }
 
     public boolean unlock() {
         boolean ret = false;
-        if (!(this.mThisDataName == null || this.mLocker == null)) {
-            Container container = Binders.getContainer(this.mThisModuleName);
-            if (container != null) {
+        if (null != mThisDataName && null != mLocker) {
+            Binders.Container container = Binders.getContainer(mThisModuleName);
+            if (null != container) {
                 try {
-                    ret = container.unlock(this.mThisDataName, this.mLocker);
+                    ret = container.unlock(mThisDataName, mLocker);
                 } catch (RemoteException e) {
                     e.printStackTrace();
                 }
@@ -374,11 +392,11 @@ public class Data<OBSERVER> implements DataViewCallback, Parcelable {
 
     public boolean unlockAll() {
         boolean ret = false;
-        if (this.mThisDataName != null) {
-            Container container = Binders.getContainer(this.mThisModuleName);
-            if (container != null) {
+        if (null != mThisDataName) {
+            Binders.Container container = Binders.getContainer(mThisModuleName);
+            if (null != container) {
                 try {
-                    ret = container.unlockAll(this.mThisDataName);
+                    ret = container.unlockAll(mThisDataName);
                 } catch (RemoteException e) {
                     e.printStackTrace();
                 }
@@ -387,14 +405,23 @@ public class Data<OBSERVER> implements DataViewCallback, Parcelable {
         return ret;
     }
 
+    /**
+     * 将数据同步到本地和远程, 会出本地和远程的监听
+     * @param exeObserver
+     * @param param
+     * @return
+     */
     protected boolean syncData(DataChangedObserver observer, boolean exeObserver, Data param) {
         boolean ret = false;
-        execLocalObservers(null, exeObserver, this, this, param);
-        if (this.mThisDataName != null) {
-            Container container = Binders.getContainer(this.mThisModuleName);
-            if (container != null) {
+        //正常运行的时候, 以本地数据为准, 当连接到远程的时候, 将远程数据同步到本地,
+        execLocalObservers(null, exeObserver, Data.this, this, param);
+
+        if (null != mThisDataName) {
+            Binders.Container container = Binders.getContainer(mThisModuleName);
+            if (null != container) {
+                //不管数据想不想等, 数据改变才设置远程监听
                 try {
-                    ret = container.setData(this.mThisDataName, string(), observer, exeObserver, this.mEnableLastValue, this, param);
+                    ret = container.setData(mThisDataName, string(), observer, exeObserver, mEnableLastValue, this, param);
                 } catch (RemoteException e) {
                     e.printStackTrace();
                 }
@@ -423,32 +450,40 @@ public class Data<OBSERVER> implements DataViewCallback, Parcelable {
         return syncData(null, true, param);
     }
 
+    /**
+     * 是LastValue有效, LastValue 在处理大数据的时候, 频繁的申请和释放内存, 使得GC清理频繁, 导致软件卡顿
+     * @param have
+     * @param <T>
+     * @return
+     */
     public <T extends Data> T enableLastValue(boolean have) {
-        this.mEnableLastValue = have;
+        mEnableLastValue = have;
         return (T)this;
     }
 
+    /**
+     * 绑定监听,先将监听添加到本地, 然后在注册到Remoter, 当对象销毁的时候, 注销远程监听
+     * @param observer
+     * @return
+     */
     public boolean addObserver(boolean execFirst, OBSERVER observer) {
         boolean ret = false;
-        if (observer != null) {
-            synchronized (this.mLocalObservers) {
-                ret = this.mLocalObservers.add(observer);
+        if (null != observer) {
+            synchronized (mLocalObservers) {
+                ret = mLocalObservers.add(observer);
             }
-            Container container = Binders.getContainer(this.mThisModuleName);
-            if (container != null) {
-                Data packet = container.getData(this.mThisDataName, this);
+
+            Binders.Container container = Binders.getContainer(mThisModuleName);
+            if (null != container) {
+                Data packet = container.getData(mThisDataName, this);
                 if (!equals(packet)) {
-                    Data last;
-                    if (!(this instanceof Packet) || this.mEnableLastValue) {
-                        last = clone(this);
+                    Data last = (!(this instanceof Packet) || mEnableLastValue) ? clone(this) : null;
+                    if (null != packet && null != packet.mValue) {
+                        mValue = packet.mValue;
                     } else {
-                        last = null;
-                    }
-                    if (packet == null || packet.mValue == null) {
                         copy(packet);
-                    } else {
-                        this.mValue = packet.mValue;
                     }
+
                     execLocalObservers(null, true, this, last, null);
                 } else if (execFirst) {
                     execLocalObserver(observer, this, this, null);
@@ -464,17 +499,20 @@ public class Data<OBSERVER> implements DataViewCallback, Parcelable {
 
     public boolean removeObserver(OBSERVER observer) {
         boolean ret = false;
-        if (observer != null) {
-            synchronized (this.mLocalObservers) {
-                ret = this.mLocalObservers.remove(observer);
+        if (null != observer) {
+            synchronized (mLocalObservers) {
+                ret = mLocalObservers.remove(observer);
             }
         }
         return ret;
     }
 
+    /**
+     * 清除所有的监听, 以防止内存泄漏
+     */
     public void clearObservers() {
-        synchronized (this.mLocalObservers) {
-            this.mLocalObservers.clear();
+        synchronized (mLocalObservers) {
+            mLocalObservers.clear();
         }
     }
 
@@ -487,29 +525,29 @@ public class Data<OBSERVER> implements DataViewCallback, Parcelable {
     }
 
     private void doExecLocalObservers(@Nullable OBSERVER observer, boolean execObserver, @NonNull Data curr, @NonNull Data last, @Nullable Data param) {
-        if (observer != null) {
+        //先同步远程的值
+        if (null != observer) {
             execLocalObserver(observer, curr, last, param);
         }
+        //同步本地值
         if (execObserver) {
-            synchronized (this.mLocalObservers) {
-                for (OBSERVER iInterface : this.mLocalObservers) {
+            synchronized (mLocalObservers) {
+                for (OBSERVER iInterface : mLocalObservers) {
                     execLocalObserver(iInterface, curr, last, param);
                 }
             }
         }
     }
 
-    protected void execLocalObservers(@Nullable OBSERVER observer, boolean execObserver, @NonNull Data curr, @NonNull Data last, @Nullable Data param) {
-        Slog.d("start to exec local observers:", "name" + this.mUniqueName);
-        if (this.mHandler != null) {
+    protected void execLocalObservers(@Nullable final OBSERVER observer, final boolean execObserver, @NonNull Data curr, @NonNull final Data last, @Nullable final Data param) {
+        Slog.d("start to exec local observers:", "name"+mUniqueName);
+        if (null != mHandler) {
+            //异步执行, 在执行监听之前可能数据已经改变, 所以必须为克隆, 不能直接传递this
             final Data finalCurr = clone(curr);
-            final OBSERVER observer2 = observer;
-            final boolean z = execObserver;
-            final Data data = last;
-            final Data data2 = param;
-            this.mHandler.post(new Runnable() {
+            mHandler.post(new Runnable() {
+                @Override
                 public void run() {
-                    Data.this.doExecLocalObservers(observer2, z, finalCurr, data, data2);
+                    doExecLocalObservers(observer, execObserver, finalCurr, last, param);
                 }
             });
         } else {
@@ -518,58 +556,56 @@ public class Data<OBSERVER> implements DataViewCallback, Parcelable {
         Slog.d("exec local observers finish:");
     }
 
+    @Override
     public int describeContents() {
         return 0;
     }
 
-    public static synchronized <T extends Data> T clone(T value) {
-        Data data;
-        synchronized (Data.class) {
-            Object obj;
-            if (value instanceof Data) {
-                Constructor constructor = null;
+    /**
+     *  crate a Parcel by clone(no need be overloaded)
+     *  new Packet(null).copy();
+     * @param value
+     * @return
+     */
+    public synchronized static <T extends Data> T clone(T value) {
+        Object obj = null;
+        if (value instanceof Data) {
+            Constructor constructor = null;
+            try {
+                constructor = value.getClass().getDeclaredConstructor(Parcel.class);
+                constructor.setAccessible(true);
+            } catch (NoSuchMethodException e) {
+                new CloneNotSupportedException("Make sure the 'protected " + value.getClass().getSimpleName() + "(Parcel in, int flag)'" + "constructor has been implemented:" + value.getClass().getName()).printStackTrace();
+            }
+
+            if (null != constructor) {
                 try {
-                    constructor = value.getClass().getDeclaredConstructor(new Class[]{Parcel.class});
-                    constructor.setAccessible(true);
-                } catch (NoSuchMethodException e) {
-                    new CloneNotSupportedException("Make sure the 'protected " + value.getClass().getSimpleName() + "(Parcel in, int flag)'" + "constructor has been implemented:" + value.getClass().getName()).printStackTrace();
-                }
-                if (constructor != null) {
-                    try {
-                        Object obj2 = constructor.newInstance(new Object[]{(Parcel) null});
-                        if (obj2 instanceof Data) {
-                            ((Data) obj2).mThisDataName = value.mThisDataName;
-                            ((Data) obj2).copy(value);
-                        }
-                        obj = obj2;
-                    } catch (InstantiationException e2) {
-                        e2.printStackTrace();
-                        obj = null;
-                    } catch (IllegalAccessException e3) {
-                        e3.printStackTrace();
-                        obj = null;
-                    } catch (InvocationTargetException e4) {
-                        e4.printStackTrace();
-                        obj = null;
+                    obj = constructor.newInstance((Parcel) null);
+                    if (obj instanceof Data) {
+                        ((T) obj).mThisDataName = (value).mThisDataName;
+                        ((T) obj).copy(value);
                     }
-                    data = (Data) obj;
+                } catch (InstantiationException e) {
+                    e.printStackTrace();
+                } catch (IllegalAccessException e) {
+                    e.printStackTrace();
+                } catch (InvocationTargetException e) {
+                    e.printStackTrace();
                 }
             }
-            obj = null;
-            data = (Data) obj;
         }
-        return (T)data;
+        return ((T) obj);
     }
 
     protected Data create(Object value) {
         Data pack = null;
         try {
-            Constructor constructor = getClass().getDeclaredConstructor(new Class[]{Parcel.class});
+            Constructor constructor = getClass().getDeclaredConstructor(Parcel.class);
             constructor.setAccessible(true);
-            if (constructor != null) {
-                Object obj = constructor.newInstance(new Object[]{(Parcel) null});
+            if (null != constructor) {
+                Object obj = constructor.newInstance((Parcel) null);
                 if (obj instanceof Data) {
-                    pack = (Data) obj;
+                    pack = (Data)obj;
                     if (value instanceof Data) {
                         pack.mThisDataName = ((Data) value).mThisDataName;
                     } else {
@@ -578,75 +614,102 @@ public class Data<OBSERVER> implements DataViewCallback, Parcelable {
                 }
             }
         } catch (NoSuchMethodException e) {
-            new CloneNotSupportedException("Make sure the 'protected " + getClass().getSimpleName() + "(Parcel in, int flag)'" + "constructor has been implemented:" + getClass().getName()).printStackTrace();
-        } catch (IllegalAccessException e2) {
-            e2.printStackTrace();
-        } catch (InstantiationException e3) {
-            e3.printStackTrace();
-        } catch (InvocationTargetException e4) {
-            e4.printStackTrace();
+            new CloneNotSupportedException("Make sure the 'protected "+getClass().getSimpleName()+"(Parcel in, int flag)'"+"constructor has been implemented:"+getClass().getName()).printStackTrace();
+        } catch (IllegalAccessException e) {
+            e.printStackTrace();
+        } catch (InstantiationException e) {
+            e.printStackTrace();
+        } catch (InvocationTargetException e) {
+            e.printStackTrace();
         }
         return pack;
     }
 
+    public static final Creator<Data> CREATOR = new Creator<Data>() {
+        @Override
+        public Data createFromParcel(Parcel in) {
+            return (Data) Binders.createObjFromParcel(in);
+        }
+
+        @Override
+        public Data[] newArray(int size) {
+            return new Data[size];
+        }
+    };
+
+    /**
+     * (Must be overloaded)
+     * @param in
+     */
     protected Data(Parcel in, int flags) {
-        this.mSupportRemote = true;
-        this.mEnableLastValue = false;
-        this.mUniqueName = new Object();
-        this.mLocalObservers = new ArrayList();
-        if (in != null && (flags & 1) != 0) {
-            in.readString();
+        if ((null != in) && (flags & 1) != 0) {
+            in.readString(); //预先将class读取,但不保存
         }
     }
 
+    /**
+     * (Must be overloaded, super.writeToParcel(...), Must be placed above the user code)
+     * aidl 依次写入函数索引,函数入口参数方向, 参数值, 然后写入定义的变量, 我的做法是在写入变量之前插入了类名
+     * 读取的顺序必须严格按照写入的顺序
+     * @param dest
+     * @param flags
+     */
+    @Override
     public void writeToParcel(Parcel dest, int flags) {
-        if (dest != null && (flags & 1) != 0) {
+        if (null != dest && (flags & 1) != 0) {
             dest.writeString(getClass().getName());
         }
     }
 
     public String string() {
-        return this.mUniqueName.toString();
+        return mUniqueName.toString();
     }
 
+    /**
+     * copy content from parcel(Must be overloaded)
+     * @param value
+     */
     public Data copy(Object value) {
-        if (this.mValue instanceof Data) {
-            ((Data) this.mValue).copy(value);
+        if (mValue instanceof Data) {
+            ((Data) mValue).copy(value);
         } else {
-            this.mValue = value;
+            mValue = value;
         }
         return this;
     }
 
+    /**
+     * (Must be overloaded
+     */
+    @Override
     public boolean equals(Object obj) {
-        boolean z = true;
-        if (obj == null) {
-            if (this.mValue != null) {
-                z = false;
-            }
-            return z;
-        } else if (!obj.getClass().isArray()) {
-            return obj.equals(this.mValue);
-        } else {
-            if (this.mValue == null || !this.mValue.getClass().isArray()) {
-                return false;
-            }
-            int len = Array.getLength(obj);
-            if (len != Array.getLength(this.mValue)) {
-                return false;
-            }
-            for (int i = 0; i < len; i++) {
-                Object a = Array.get(obj, i);
-                Object b = Array.get(obj, i);
-                if (a == null) {
-                    if (b != null) {
-                        return false;
+        if (null != obj) {
+            if (obj.getClass().isArray()) {
+                if (null != mValue && mValue.getClass().isArray()) {
+                    int len = Array.getLength(obj);
+                    if (len == Array.getLength(mValue)) {
+                        for (int i = 0; i < len; i++) {
+                            Object a = Array.get(obj, i);
+                            Object b = Array.get(obj, i);
+                            if (null == a) {
+                                if (b != null) {
+                                    return false;
+                                }
+                            } else {
+                                if (b == null || !a.equals(b)) {
+                                    return false;
+                                }
+                            }
+                        }
+                        return true;
                     }
-                } else if (b == null || !a.equals(b)) {
-                    return false;
                 }
+            } else {
+                return obj.equals(mValue);
             }
-            return true;
+        } else {
+            return mValue == null;
         }
+        return false;
     }
 }
